@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Журнал вкусов Monster</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a tasting ledger. Header with progress, one control block, then rows grouped by product line; a row opens in place for score, descriptors and a note. */
+:root{
+  --bg:#E6EAE5;
+  --surface:#F3F6F1;
+  --fg:#17211C;
+  --muted:#5B685F;
+  --line:#C5CEC5;
+  --accent:#0E6B55;
+  --accent-ink:#F3F6F1;
+  --accent-soft:#CFE6DC;
+  --warn:#A8501A;
+  --warn-soft:#F0DAC8;
+  --font-display:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;
+  --font-body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#101713;--surface:#18221C;--fg:#E4EBE5;--muted:#92A197;--line:#2B3A31;
+    --accent:#58D1AC;--accent-ink:#0B1410;--accent-soft:#1D3A2F;--warn:#E39155;--warn-soft:#3A2616;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#101713;--surface:#18221C;--fg:#E4EBE5;--muted:#92A197;--line:#2B3A31;
+  --accent:#58D1AC;--accent-ink:#0B1410;--accent-soft:#1D3A2F;--warn:#E39155;--warn-soft:#3A2616;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--bg);color:var(--fg);
+  font:15px/1.45 var(--font-body);
+  padding-block:24px 64px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:none;border:0;padding:0;cursor:pointer;text-align:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.page{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+
+.eyebrow{font:500 12px var(--font-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+h1{font:800 clamp(44px,11vw,72px)/.9 var(--font-display);text-transform:uppercase;letter-spacing:.005em;margin:0;text-wrap:balance}
+.lede{margin:12px 0 0;color:var(--muted);max-width:56ch}
+
+.stats{display:flex;flex-wrap:wrap;gap:20px 36px;align-items:flex-end}
+.prog{flex:1 1 240px;min-width:0}
+.big{font:800 52px/1 var(--font-display);font-variant-numeric:tabular-nums}
+.big small{font-size:26px;color:var(--muted);font-weight:700}
+.bar{height:6px;background:var(--line);margin-top:8px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
+.kv{display:grid;gap:2px;min-width:0}
+.kv span{font:500 11px var(--font-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.kv b{font:600 20px var(--font-mono);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.kv b.sm{font:600 14px/1.3 var(--font-body)}
+
+.ctl{display:grid;gap:12px}
+.search{width:100%;padding:11px 12px;border:1px solid var(--line);background:var(--surface);border-radius:4px}
+.search::placeholder{color:var(--muted)}
+.wrap{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:var(--surface)}
+.seg button{padding:7px 12px;font-size:13px}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+.sel{padding:7px 10px;border:1px solid var(--line);background:var(--surface);border-radius:4px;font-size:13px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:5px 10px;border:1px solid var(--line);border-radius:999px;font-size:13px;background:var(--surface)}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.count{font:500 12px var(--font-mono);color:var(--muted)}
+
+.grp{margin:0}
+.gh{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:18px 0 8px;border-bottom:2px solid var(--fg)}
+.gh h2{font:800 28px/1 var(--font-display);text-transform:uppercase;margin:0;letter-spacing:.01em}
+.gh .gs{color:var(--muted);font-size:13px;flex:1 1 140px;min-width:0}
+.gh .gc{font:600 13px var(--font-mono);font-variant-numeric:tabular-nums}
+ul.rows{list-style:none;margin:0;padding:0}
+.row{border-bottom:1px solid var(--line)}
+.rmain{display:grid;grid-template-columns:28px 36px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 0}
+.th{width:36px;height:48px;display:grid;place-items:center;border:1px solid var(--line);border-radius:4px;background:var(--surface);overflow:hidden;color:var(--muted)}
+.th svg{width:18px;height:24px}
+.th img{width:100%;height:100%;object-fit:contain}
+.photo{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.phw{flex:0 0 100%}
+.ph{display:block;max-height:180px;max-width:100%;border:1px solid var(--line);border-radius:4px;background:var(--surface)}
+.pick{position:relative;cursor:pointer}
+.pick:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.sr{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.chk{width:26px;height:26px;border:1.5px solid var(--muted);border-radius:4px;display:grid;place-items:center;background:var(--surface);color:transparent}
+.chk svg{width:16px;height:16px}
+.chk[aria-checked="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.rname{min-width:0;display:grid;gap:1px;padding:2px 0}
+.nm{font-weight:500;overflow-wrap:anywhere}
+.reg{font:600 10px var(--font-mono);letter-spacing:.08em;font-style:normal;margin-left:8px;padding:1px 5px;border:1px solid var(--muted);color:var(--muted);vertical-align:2px}
+.sub{font:400 12px var(--font-mono);color:var(--muted);overflow-wrap:anywhere}
+.sc{min-width:44px;height:30px;display:grid;place-items:center;border:1px solid var(--line);border-radius:4px;font:600 14px var(--font-mono);color:var(--muted);font-variant-numeric:tabular-nums;background:var(--surface)}
+.sc[data-b="hi"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.sc[data-b="mid"]{color:var(--fg);border-color:var(--muted)}
+.sc[data-b="lo"]{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+.row.open .rmain{padding-bottom:6px}
+
+.panel{padding:6px 0 18px 40px;display:grid;gap:10px}
+.lbl{font:500 11px var(--font-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:6px}
+.scores{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:4px}
+.scores button{height:36px;border:1px solid var(--line);border-radius:4px;display:grid;place-items:center;font:600 14px var(--font-mono);background:var(--surface)}
+.scores button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.addd{display:flex;gap:8px;flex-wrap:wrap}
+.addd input,.addf input,.addf select,.panel textarea{padding:8px 10px;border:1px solid var(--line);background:var(--surface);border-radius:4px;min-width:0}
+.addd input{flex:1 1 160px}
+.panel textarea{width:100%;resize:vertical}
+.btn{padding:8px 14px;border:1px solid var(--fg);border-radius:4px;font-size:13px;font-weight:500}
+.btn:hover{background:var(--fg);color:var(--bg)}
+.btn.danger{border-color:var(--warn);color:var(--warn)}
+.btn.danger:hover{background:var(--warn);color:var(--bg)}
+.pa{display:flex;gap:8px;flex-wrap:wrap}
+
+.empty{padding:40px 0;text-align:center;color:var(--muted);display:grid;gap:12px;justify-items:center}
+
+.foot{display:grid;gap:14px;border-top:2px solid var(--fg);padding-top:18px}
+.foot h2{font:800 22px/1 var(--font-display);text-transform:uppercase;margin:0}
+.addf{display:flex;flex-wrap:wrap;gap:8px}
+.addf input{flex:2 1 180px}
+.addf select{flex:1 1 140px}
+.note{font:400 12px var(--font-mono);color:var(--muted)}
+
+@media (max-width:480px){
+  .panel{padding-left:0}
+  .scores{grid-template-columns:repeat(5,minmax(0,1fr))}
+}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <p class="eyebrow">Дегустационный журнал</p>
+    <h1>Вкусы Monster<br>со всего мира</h1>
+    <p class="lede">Отмечай, что уже пробовал, ставь оценку от 1 до 10 и добавляй дескрипторы. Если вкуса нет в списке, его можно добавить внизу.</p>
+  </header>
+
+  <section class="stats" aria-label="Прогресс">
+    <div class="prog">
+      <div class="big"><span id="sTried">0</span> <small>/ <span id="sTotal">0</span></small></div>
+      <div class="bar" role="progressbar" aria-label="Доля пробованных вкусов" aria-valuemin="0" aria-valuemax="100" id="sBar"><i id="sFill"></i></div>
+    </div>
+    <div class="kv"><span>Средняя</span><b id="sAvg">—</b></div>
+    <div class="kv"><span>Лучший</span><b class="sm" id="sBest">—</b></div>
+  </section>
+
+  <section class="ctl" aria-label="Фильтры">
+    <input class="search" id="q" type="search" placeholder="Поиск по названию, дескриптору или заметке" autocomplete="off">
+    <div class="wrap">
+      <div class="seg" role="group" aria-label="Статус">
+        <button type="button" data-st="all" aria-pressed="true">Все</button>
+        <button type="button" data-st="yes" aria-pressed="false">Пробовал</button>
+        <button type="button" data-st="no" aria-pressed="false">Не пробовал</button>
+      </div>
+      <select class="sel" id="sort" aria-label="Сортировка">
+        <option value="line">По линейкам</option>
+        <option value="score">По оценке</option>
+        <option value="az">По алфавиту</option>
+      </select>
+      <span class="count" id="cnt"></span>
+    </div>
+    <div class="chips" id="chips" role="group" aria-label="Линейка"></div>
+  </section>
+
+  <main id="list"></main>
+
+  <section class="foot">
+    <h2>Нет вкуса в списке?</h2>
+    <form class="addf" id="addForm">
+      <input id="cname" type="text" maxlength="60" placeholder="Название, например Ultra Mango Tango" autocomplete="off" aria-label="Название нового вкуса">
+      <select id="cline" aria-label="Линейка нового вкуса"></select>
+      <button class="btn" type="submit">Добавить</button>
+    </form>
+    <div class="wrap">
+      <button class="btn" type="button" id="exp">Экспорт в CSV</button>
+      <button class="btn" type="button" id="bak">Сохранить копию</button>
+      <label class="btn pick">Загрузить копию<input type="file" accept=".json,application/json" class="sr" id="imp" aria-label="Загрузить сохранённую копию"></label>
+      <span class="note" id="sync">Сохраняется в этом браузере</span>
+    </div>
+    <p class="note" style="margin:0">Список собран из каталогов и обзоров по основным линейкам и региональным версиям. Новые вкусы выходят постоянно, поэтому недостающие можно добавить вручную.</p>
+    <p class="note" style="margin:0">Отметки и фото хранятся в этом браузере на этом устройстве, в другом браузере будет чистая страница. Чтобы не потерять записи, иногда нажимай «Сохранить копию». Загрузка копии заменяет текущие отметки.</p>
+  </section>
+</div>
+
+<script>
+(function(){
+  var LINES=[
+    {k:'orig',n:'Классика',s:'Original, Zero Sugar, Lo-Carb и старые версии',i:[
+      ['Original Green'],['Zero Sugar'],['Lo-Carb'],['Absolutely Zero'],['Assault'],['Unleaded'],['Heavy Metal'],
+      ['Import'],['Import Light'],['M3'],['Mule Ginger Brew'],['Übermonster Brew']]},
+    {k:'ultra',n:'Ultra',s:'Без сахара, лёгкий профиль',i:[
+      ['Ultra White'],['Ultra Blue'],['Ultra Red'],['Ultra Black'],['Ultra Violet'],['Ultra Sunrise'],['Ultra Citron'],
+      ['Ultra Paradise'],['Ultra Rosá'],['Ultra Fiesta Mango'],['Ultra Watermelon'],['Ultra Gold'],
+      ['Ultra Strawberry Dreams'],['Ultra Peachy Keen'],['Ultra Fantasy Ruby Red'],['Ultra Blue Hawaiian'],
+      ['Ultra Vice Guava'],['Ultra Wild Passion']]},
+    {k:'juice',n:'Juice и Punch',s:'С добавлением сока, в Европе называется Punch',i:[
+      ['Khaos'],['Khaotic'],['Mango Loco'],['Pipeline Punch'],['Aussie-Style Lemonade'],['Ripper'],['Juiced Ripper','EU'],
+      ['Papillon'],['Pacific Punch'],['Monarch'],['Mixxd'],['M-80'],['Bad Apple','EU'],['Baller’s Blend'],['Mad Dog Dub Edition']]},
+    {k:'hydro',n:'Hydro',s:'Hydro Super Sport',i:[
+      ['Hydro Manic Melon'],['Hydro Mean Green'],['Hydro Purple Passion'],['Hydro Tropical Thunder']]},
+    {k:'rehab',n:'Rehab',s:'Чай, лимонад и энергия',i:[
+      ['Rehab Peach Tea'],['Rehab Raspberry Tea'],['Rehab Green Tea'],['Rehab Lemonade'],['Rehab Pink Lemonade'],
+      ['Rehab Orangeade'],['Rehab Strawberry Lemonade'],['Rehab Watermelon'],['Rehab Wild Berry']]},
+    {k:'java',n:'Java и кофе',s:'Кофейные энергетики',i:[
+      ['Java Mean Bean'],['Java Loca Moca'],['Java Vanilla Light'],['Java Kona Blend'],['Java Irish Crème'],
+      ['Java Salted Caramel'],['Java Swiss Chocolate'],['Java Farmer’s Oats'],['Espresso','EU']]},
+    {k:'reserve',n:'Reserve',s:'Серия на белом фоне',i:[
+      ['Reserve White Pineapple'],['Reserve Watermelon'],['Reserve Orange Dreamsicle'],['Reserve Kiwi Strawberry']]},
+    {k:'tea',n:'Dragon Tea',s:'Чайная линейка',i:[['Dragon Tea Peach'],['Dragon Tea Lemon']]},
+    {k:'muscle',n:'Muscle Monster',s:'Протеиновый напиток с кофеином',i:[['Muscle Monster Vanilla'],['Muscle Monster Chocolate']]},
+    {k:'nitro',n:'Nitro',s:'Нитро-серия',i:[['Nitro Super Dry'],['Nitro Cosmic Peach']]},
+    {k:'collab',n:'Коллабы и лимитки',s:'Именные и сезонные выпуски',i:[
+      ['Gronk'],['Rossi «The Doctor»'],['Lewis Hamilton'],['The Beast Unleashed Scary Berries']]},
+    {k:'jp',n:'Эксклюзивы Японии',s:'Только на японском рынке',i:[
+      ['Super Cola 500 мл','JP'],['Cuba Libre','JP'],['Cuba Lima','JP'],['Coffee Monster','JP']]}
+  ];
+  var PRESETS=['сладкий','кислый','цитрус','тропики','ягоды','яблоко','персик','арбуз и дыня','кола','кофе','ваниль и сливки','шоколад и карамель','чай','имбирь','лёгкий','насыщенный','химозный','горчит','свежий','как классика'];
+  var LS='monster-tasting-log-v1';
+
+  var state={v:1,u:0,items:{},custom:[]};
+  var ui={q:'',line:'all',st:'all',sort:'line',open:null,fk:null,del:null};
+
+  function $(s){return document.querySelector(s)}
+  function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+  function slug(s){return s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'x'}
+  function lineName(k){for(var i=0;i<LINES.length;i++)if(LINES[i].k===k)return LINES[i].n;return k}
+
+  function normalize(r){
+    var o={v:1,u:+(r&&r.u)||0,items:{},custom:[]};
+    if(r&&r.items&&typeof r.items==='object'){
+      Object.keys(r.items).forEach(function(id){
+        var x=r.items[id]||{};
+        o.items[id]={t:x.t?1:0,s:Math.max(0,Math.min(10,+x.s||0)),d:Array.isArray(x.d)?x.d.slice(0,30):[],n:typeof x.n==='string'?x.n:'',p:typeof x.p==='string'?x.p:''};
+      });
+    }
+    if(r&&Array.isArray(r.custom)){
+      o.custom=r.custom.filter(function(c){return c&&c.id&&c.name}).map(function(c){return {id:String(c.id),name:String(c.name),line:String(c.line||'orig')}});
+    }
+    return o;
+  }
+  function loadLocal(){try{var s=localStorage.getItem(LS);if(s)return normalize(JSON.parse(s))}catch(e){}return null}
+  function saveLocal(){try{localStorage.setItem(LS,JSON.stringify(state));return true}catch(e){return false}}
+
+  function setSync(m){
+    var t={local:'Сохраняется в этом браузере',err:'Память браузера заполнена, часть данных могла не сохраниться. Удали лишние фото и сохрани копию'};
+    $('#sync').textContent=t[m]||t.local;
+  }
+  function touch(){
+    state.u=Date.now();
+    setSync(saveLocal()?'local':'err');
+  }
+
+  function it(id){return state.items[id]||(state.items[id]={t:0,s:0,d:[],n:'',p:''})}
+  function get(id){return state.items[id]||{t:0,s:0,d:[],n:'',p:''}}
+  var assetsApi=true;
+  var CAN='<svg viewBox="0 0 24 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="23" rx="2.5"/><path d="M8.5 5V3.5h7V5M5 10h14M5 23h14"/></svg>';
+  function shrink(file){
+    return new Promise(function(res,rej){
+      var url=URL.createObjectURL(file),im=new Image();
+      im.onload=function(){
+        var sc=Math.min(1,360/Math.max(im.width,im.height)),c=document.createElement('canvas');
+        c.width=Math.max(1,Math.round(im.width*sc));c.height=Math.max(1,Math.round(im.height*sc));
+        c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(url);
+        res(c.toDataURL('image/jpeg',0.75));
+      };
+      im.onerror=function(){URL.revokeObjectURL(url);rej(new Error('img'))};
+      im.src=url;
+    });
+  }
+
+  function all(){
+    var out=[];
+    LINES.forEach(function(L){L.i.forEach(function(p){
+      out.push({id:L.k+':'+slug(p[0]),name:p[0],line:L.k,lineName:L.n,reg:p[1]||'',custom:false});
+    })});
+    state.custom.forEach(function(c){out.push({id:c.id,name:c.name,line:c.line,lineName:lineName(c.line),reg:'',custom:true})});
+    return out;
+  }
+
+  function filtered(list){
+    var q=ui.q.trim().toLowerCase();
+    var f=list.filter(function(x){
+      var s=get(x.id);
+      if(ui.line!=='all'&&x.line!==ui.line)return false;
+      if(ui.st==='yes'&&!s.t)return false;
+      if(ui.st==='no'&&s.t)return false;
+      if(q){
+        var hay=(x.name+' '+x.lineName+' '+(s.d||[]).join(' ')+' '+(s.n||'')).toLowerCase();
+        if(hay.indexOf(q)<0)return false;
+      }
+      return true;
+    });
+    if(ui.sort==='score'){
+      f.sort(function(a,b){return (get(b.id).s-get(a.id).s)||a.name.localeCompare(b.name)});
+    }else if(ui.sort==='az'){
+      f.sort(function(a,b){return a.name.localeCompare(b.name)});
+    }
+    return f;
+  }
+
+  var TICK='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5"/></svg>';
+
+  function badge(s){return s>=8?'hi':s>=5?'mid':s>=1?'lo':''}
+
+  function rowHTML(x,flat){
+    var s=get(x.id),open=ui.open===x.id,id=esc(x.id);
+    var tags=(s.d||[]).slice(0,4).join(', ');
+    var sub=(flat?x.lineName+(tags?' · ':''):'')+tags;
+    var h='<li class="row'+(open?' open':'')+'"><div class="rmain">'+
+      '<button type="button" class="chk" role="checkbox" aria-checked="'+(s.t?'true':'false')+'" aria-label="Пробовал: '+esc(x.name)+'" data-act="tog" data-id="'+id+'" data-fk="tog:'+id+'">'+TICK+'</button>'+
+      '<button type="button" class="th" tabindex="-1" aria-label="Фото банки: '+esc(x.name)+'" data-act="open" data-id="'+id+'">'+(s.p?'<img src="'+esc(s.p)+'" alt="">':CAN)+'</button>'+
+      '<button type="button" class="rname" aria-expanded="'+open+'" data-act="open" data-id="'+id+'" data-fk="open:'+id+'">'+
+        '<span class="nm">'+esc(x.name)+(x.reg?'<em class="reg">'+x.reg+'</em>':'')+'</span>'+
+        (sub?'<span class="sub">'+esc(sub)+'</span>':'')+
+      '</button>'+
+      '<button type="button" class="sc" data-b="'+badge(s.s)+'" aria-label="Оценка '+(s.s||'не выставлена')+'" data-act="open" data-id="'+id+'">'+(s.s||'—')+'</button>'+
+    '</div>';
+    if(open){
+      var extra=(s.d||[]).filter(function(d){return PRESETS.indexOf(d)<0});
+      var chips=PRESETS.concat(extra).map(function(d){
+        return '<button type="button" class="chip" aria-pressed="'+((s.d||[]).indexOf(d)>=0)+'" data-act="desc" data-id="'+id+'" data-d="'+esc(d)+'" data-fk="desc:'+id+':'+esc(d)+'">'+esc(d)+'</button>';
+      }).join('');
+      var sc='';
+      for(var v=1;v<=10;v++)sc+='<button type="button" data-act="score" data-id="'+id+'" data-v="'+v+'" aria-pressed="'+(s.s===v)+'" aria-label="Оценка '+v+'" data-fk="score:'+id+':'+v+'">'+v+'</button>';
+      var photo='';
+      if(assetsApi){
+        photo='<div class="lbl">Фото банки</div><div class="photo">'+
+          (s.p?'<div class="phw"><img class="ph" src="'+esc(s.p)+'" alt="Банка: '+esc(x.name)+'"></div>':'')+
+          '<label class="btn pick">'+(s.p?'Заменить фото':'Добавить фото')+'<input type="file" accept="image/*" class="sr" data-photo="'+id+'" aria-label="Выбрать фото банки"></label>'+
+          (s.p?'<button type="button" class="btn" data-act="photodel" data-id="'+id+'">Убрать фото</button>':'')+
+          '<span class="note" id="ps-'+id+'"></span></div>';
+      }
+      h+='<div class="panel">'+
+        '<div class="lbl">Оценка</div><div class="scores">'+sc+'</div>'+
+        '<div class="lbl">Дескрипторы</div><div class="chips">'+chips+'</div>'+
+        '<div class="addd"><input type="text" id="cd-'+id+'" maxlength="30" placeholder="Свой дескриптор" aria-label="Свой дескриптор" data-cd="'+id+'"><button type="button" class="btn" data-act="adddesc" data-id="'+id+'">Добавить</button></div>'+
+        photo+
+        '<div class="lbl">Заметка</div>'+
+        '<textarea id="nt-'+id+'" rows="2" maxlength="500" data-note="'+id+'" placeholder="Где пробовал, на что похоже" aria-label="Заметка">'+esc(s.n||'')+'</textarea>'+
+        '<div class="pa"><button type="button" class="btn" data-act="reset" data-id="'+id+'">Сбросить запись</button>'+
+        (x.custom?'<button type="button" class="btn danger" data-act="del" data-id="'+id+'">'+(ui.del===x.id?'Точно удалить?':'Удалить вкус')+'</button>':'')+
+        '</div></div>';
+    }
+    return h+'</li>';
+  }
+
+  function renderStats(list){
+    var tried=0,sum=0,n=0,best=null;
+    list.forEach(function(x){
+      var s=get(x.id);
+      if(s.t)tried++;
+      if(s.s){sum+=s.s;n++;if(!best||s.s>get(best.id).s)best=x}
+    });
+    $('#sTried').textContent=tried;
+    $('#sTotal').textContent=list.length;
+    var pct=list.length?Math.round(tried/list.length*100):0;
+    $('#sFill').style.width=pct+'%';
+    $('#sBar').setAttribute('aria-valuenow',pct);
+    $('#sAvg').textContent=n?(sum/n).toFixed(1):'—';
+    $('#sBest').textContent=best?best.name+' · '+get(best.id).s:'—';
+  }
+
+  function renderChips(list){
+    var h='<button type="button" class="chip" data-line="all" aria-pressed="'+(ui.line==='all')+'">Все</button>';
+    LINES.forEach(function(L){
+      h+='<button type="button" class="chip" data-line="'+L.k+'" aria-pressed="'+(ui.line===L.k)+'">'+esc(L.n)+'</button>';
+    });
+    $('#chips').innerHTML=h;
+  }
+
+  function renderList(list,f){
+    var el=$('#list');
+    $('#cnt').textContent='Показано '+f.length+' из '+list.length;
+    if(!f.length){
+      el.innerHTML='<div class="empty"><span>Ничего не найдено.</span><button type="button" class="btn" data-act="clear">Сбросить фильтры</button></div>';
+      return;
+    }
+    var h='';
+    if(ui.sort==='line'){
+      LINES.forEach(function(L){
+        var items=f.filter(function(x){return x.line===L.k});
+        if(!items.length)return;
+        var tot=list.filter(function(x){return x.line===L.k});
+        var tr=tot.filter(function(x){return get(x.id).t}).length;
+        h+='<section class="grp"><header class="gh"><h2>'+esc(L.n)+'</h2><span class="gs">'+esc(L.s)+'</span><span class="gc">'+tr+' / '+tot.length+'</span></header><ul class="rows">'+
+          items.map(function(x){return rowHTML(x,false)}).join('')+'</ul></section>';
+      });
+    }else{
+      h='<ul class="rows">'+f.map(function(x){return rowHTML(x,true)}).join('')+'</ul>';
+    }
+    el.innerHTML=h;
+  }
+
+  function restoreFocus(){
+    if(!ui.fk)return;
+    var els=document.querySelectorAll('[data-fk]');
+    for(var i=0;i<els.length;i++){if(els[i].getAttribute('data-fk')===ui.fk){els[i].focus({preventScroll:true});break}}
+  }
+
+  function render(){
+    var list=all(),f=filtered(list);
+    renderStats(list);renderChips(list);renderList(list,f);restoreFocus();
+  }
+  function renderLight(){var list=all();renderStats(list)}
+
+  /* events */
+  $('#list').addEventListener('click',function(e){
+    var b=e.target.closest('[data-act]');if(!b)return;
+    var act=b.getAttribute('data-act'),id=b.getAttribute('data-id');
+    ui.fk=b.getAttribute('data-fk')||null;
+    if(act==='clear'){ui.q='';ui.line='all';ui.st='all';$('#q').value='';syncSeg();render();return}
+    if(!id)return;
+    if(act==='tog'){var s=it(id);s.t=s.t?0:1;touch()}
+    else if(act==='open'){ui.open=ui.open===id?null:id;ui.del=null;ui.fk=ui.open?b.getAttribute('data-fk'):b.getAttribute('data-fk')}
+    else if(act==='score'){var v=+b.getAttribute('data-v'),s2=it(id);s2.s=s2.s===v?0:v;if(s2.s)s2.t=1;touch()}
+    else if(act==='desc'){
+      var d=b.getAttribute('data-d'),s3=it(id),ix=s3.d.indexOf(d);
+      if(ix>=0)s3.d.splice(ix,1);else s3.d.push(d);touch();
+    }
+    else if(act==='adddesc'){addDesc(id);return}
+    else if(act==='photodel'){
+      it(id).p='';touch();
+    }
+    else if(act==='reset'){
+      delete state.items[id];ui.fk=null;touch();
+    }
+    else if(act==='del'){
+      if(ui.del!==id){ui.del=id}
+      else{
+        state.custom=state.custom.filter(function(c){return c.id!==id});
+        delete state.items[id];ui.open=null;ui.del=null;ui.fk=null;touch();
+      }
+    }
+    render();
+  });
+  function addDesc(id){
+    var inp=document.getElementById('cd-'+id);if(!inp)return;
+    var v=inp.value.trim().toLowerCase().slice(0,30);if(!v)return;
+    var s=it(id);if(s.d.indexOf(v)<0&&s.d.length<30)s.d.push(v);
+    touch();ui.fk='desc:'+id+':'+v;render();
+  }
+  $('#list').addEventListener('keydown',function(e){
+    if(e.key==='Enter'&&e.target.hasAttribute('data-cd')){e.preventDefault();addDesc(e.target.getAttribute('data-cd'))}
+  });
+  $('#list').addEventListener('input',function(e){
+    var id=e.target.getAttribute&&e.target.getAttribute('data-note');
+    if(id){it(id).n=e.target.value;touch();}
+  });
+  $('#list').addEventListener('change',function(e){
+    var id=e.target.getAttribute&&e.target.getAttribute('data-photo');
+    if(!id||!assetsApi)return;
+    var f=e.target.files&&e.target.files[0];if(!f)return;
+    var st=document.getElementById('ps-'+id);if(st)st.textContent='Загружаю…';
+    shrink(f).then(function(url){
+      it(id).p=url;touch();ui.fk=null;render();
+    }).catch(function(){
+      var st2=document.getElementById('ps-'+id);
+      if(st2)st2.textContent='Не удалось загрузить фото. Попробуй JPEG или PNG.';
+    });
+  });
+  $('#q').addEventListener('input',function(e){ui.q=e.target.value;ui.fk=null;render()});
+  $('#sort').addEventListener('change',function(e){ui.sort=e.target.value;ui.fk=null;render()});
+  $('#chips').addEventListener('click',function(e){
+    var b=e.target.closest('[data-line]');if(!b)return;
+    ui.line=b.getAttribute('data-line');ui.fk=null;render();
+  });
+  function syncSeg(){
+    document.querySelectorAll('.seg button').forEach(function(b){b.setAttribute('aria-pressed',String(b.getAttribute('data-st')===ui.st))});
+  }
+  document.querySelector('.seg').addEventListener('click',function(e){
+    var b=e.target.closest('[data-st]');if(!b)return;
+    ui.st=b.getAttribute('data-st');ui.fk=null;syncSeg();render();
+  });
+
+  var cl=$('#cline');
+  cl.innerHTML=LINES.map(function(L){return '<option value="'+L.k+'">'+esc(L.n)+'</option>'}).join('');
+  $('#addForm').addEventListener('submit',function(e){
+    e.preventDefault();
+    var name=$('#cname').value.trim();if(!name)return;
+    var id='c-'+Date.now().toString(36);
+    state.custom.push({id:id,name:name.slice(0,60),line:cl.value});
+    $('#cname').value='';
+    ui.q='';ui.line='all';ui.st='all';$('#q').value='';syncSeg();
+    ui.open=id;ui.fk=null;touch();render();
+    var row=document.querySelector('[data-id="'+id+'"]');if(row&&row.scrollIntoView)row.scrollIntoView({block:'center'});
+  });
+
+  function csv(){
+    function q(v){return '"'+String(v).replace(/"/g,'""')+'"'}
+    var rows=[['Линейка','Вкус','Пробовал','Оценка','Дескрипторы','Заметка'].map(q).join(',')];
+    all().forEach(function(x){
+      var s=get(x.id);
+      rows.push([x.lineName,x.name,s.t?'да':'нет',s.s||'',(s.d||[]).join('; '),s.n||''].map(q).join(','));
+    });
+    return '﻿'+rows.join('\r\n');
+  }
+
+  /* start */
+  var local=loadLocal();if(local)state=local;
+  render();
+  setSync('local');
+
+  function download(name,text,type){
+    var b=new Blob([text],{type:type}),a=document.createElement('a');
+    a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();
+    setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},800);
+  }
+  $('#exp').addEventListener('click',function(){download('monster-tasting-log.csv',csv(),'text/csv;charset=utf-8')});
+  $('#bak').addEventListener('click',function(){download('monster-tasting-backup.json',JSON.stringify(state),'application/json')});
+  $('#imp').addEventListener('change',function(e){
+    var f=e.target.files&&e.target.files[0];if(!f)return;
+    var r=new FileReader();
+    r.onload=function(){
+      try{
+        var o=normalize(JSON.parse(r.result));
+        if(!Object.keys(o.items).length&&!o.custom.length)throw new Error('empty');
+        o.u=Date.now();state=o;ui.open=null;ui.fk=null;
+        setSync(saveLocal()?'local':'err');render();
+        $('#sync').textContent='Копия загружена';
+      }catch(err){$('#sync').textContent='Не удалось прочитать файл копии'}
+    };
+    r.readAsText(f);e.target.value='';
+  });
+})();
+</script>
+</body>
+</html>
