@@ -136,6 +136,10 @@ ul.rows{list-style:none;margin:0;padding:0}
   .scores{grid-template-columns:repeat(5,minmax(0,1fr))}
 }
 @media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+[hidden]{display:none!important}
+.box{display:grid;gap:10px;padding:14px;border:1px solid var(--line);background:var(--surface);border-radius:4px}
+.box textarea{width:100%;padding:8px 10px;border:1px solid var(--line);background:var(--bg);border-radius:4px;font:12px/1.4 var(--font-mono);resize:vertical}
+@media (pointer:coarse){input,textarea,select{font-size:16px}}
 </style>
 </head>
 <body>
@@ -185,8 +189,19 @@ ul.rows{list-style:none;margin:0;padding:0}
     <div class="wrap">
       <button class="btn" type="button" id="exp">Экспорт в CSV</button>
       <button class="btn" type="button" id="bak">Сохранить копию</button>
-      <label class="btn pick">Загрузить копию<input type="file" accept=".json,application/json" class="sr" id="imp" aria-label="Загрузить сохранённую копию"></label>
+      <button class="btn" type="button" id="imp">Загрузить копию</button>
       <span class="note" id="sync">Сохраняется в этом браузере</span>
+    </div>
+    <div class="box" id="box" hidden>
+      <div class="lbl" id="boxT" style="margin:0"></div>
+      <p class="note" id="boxH" style="margin:0"></p>
+      <textarea id="boxA" rows="6" spellcheck="false" aria-label="Текст копии"></textarea>
+      <div class="pa">
+        <button class="btn" type="button" id="boxGo">Загрузить из текста</button>
+        <button class="btn" type="button" id="boxCopy">Копировать</button>
+        <label class="btn pick" id="boxFile">Выбрать файл<input type="file" accept=".json,.txt,application/json,text/plain" class="sr" id="boxFileIn" aria-label="Выбрать файл копии"></label>
+        <button class="btn" type="button" id="boxX">Закрыть</button>
+      </div>
     </div>
     <p class="note" style="margin:0">Список собран из каталогов и обзоров по основным линейкам и региональным версиям. Новые вкусы выходят постоянно, поэтому недостающие можно добавить вручную.</p>
     <p class="note" style="margin:0">Отметки и фото хранятся в этом браузере на этом устройстве, в другом браузере будет чистая страница. Чтобы не потерять записи, иногда нажимай «Сохранить копию». Загрузка копии заменяет текущие отметки.</p>
@@ -511,26 +526,68 @@ ul.rows{list-style:none;margin:0;padding:0}
   render();
   setSync('local');
 
+  var IOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
   function download(name,text,type){
     var b=new Blob([text],{type:type}),a=document.createElement('a');
     a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();
     setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},800);
   }
-  $('#exp').addEventListener('click',function(){download('monster-tasting-log.csv',csv(),'text/csv;charset=utf-8')});
-  $('#bak').addEventListener('click',function(){download('monster-tasting-backup.json',JSON.stringify(state),'application/json')});
-  $('#imp').addEventListener('change',function(e){
+  function shareFile(name,text,type){
+    try{
+      var f=new File([text],name,{type:type});
+      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})){
+        return navigator.share({files:[f]}).then(function(){return 'ok'},function(e){return e&&e.name==='AbortError'?'cancel':'fail'});
+      }
+    }catch(e){}
+    return Promise.resolve('fail');
+  }
+  var bx=$('#box'),bt=$('#boxT'),bh=$('#boxH'),ba=$('#boxA'),bgo=$('#boxGo'),bcp=$('#boxCopy'),bfl=$('#boxFile');
+  function showBox(mode,text,hint){
+    bx.hidden=false;
+    if(mode==='export'){
+      bt.textContent='Текст копии';
+      bh.textContent=hint;
+      ba.value=text;ba.readOnly=true;bgo.hidden=true;bcp.hidden=false;bfl.hidden=true;
+    }else{
+      bt.textContent='Загрузить копию';
+      bh.textContent='Вставь сюда текст копии или выбери файл. Текущие отметки будут заменены.';
+      ba.value='';ba.readOnly=false;bgo.hidden=false;bcp.hidden=true;bfl.hidden=false;
+    }
+    if(bx.scrollIntoView)bx.scrollIntoView({block:'center'});
+  }
+  function saveOut(name,text,type,hint){
+    shareFile(name,text,type).then(function(r){
+      if(r==='ok'||r==='cancel')return;
+      if(IOS){showBox('export',text,hint);return}
+      download(name,text,type);
+    });
+  }
+  var HINT_BAK='Нажми «Копировать» и вставь текст в Заметки или отправь его себе в сообщении. Чтобы вернуть отметки, выбери «Загрузить копию» и вставь этот текст.';
+  var HINT_CSV='Нажми «Копировать» и вставь текст в Заметки или в письмо. Это таблица в формате CSV.';
+  $('#exp').addEventListener('click',function(){saveOut('monster-tasting-log.csv',csv(),'text/csv',HINT_CSV)});
+  $('#bak').addEventListener('click',function(){saveOut('monster-tasting-backup.json',JSON.stringify(state),'application/json',HINT_BAK)});
+  $('#imp').addEventListener('click',function(){showBox('import')});
+  $('#boxX').addEventListener('click',function(){bx.hidden=true});
+  $('#boxCopy').addEventListener('click',function(){
+    function fb(){ba.focus();ba.select();try{document.execCommand('copy')}catch(e){}$('#sync').textContent='Текст выделен, нажми «Скопировать» в меню'}
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(ba.value).then(function(){$('#sync').textContent='Текст скопирован'},fb);
+    }else fb();
+  });
+  function applyBackup(txt){
+    try{
+      var o=normalize(JSON.parse(String(txt).trim()));
+      if(!Object.keys(o.items).length&&!o.custom.length)throw new Error('empty');
+      o.u=Date.now();state=o;ui.open=null;ui.fk=null;
+      setSync(saveLocal()?'local':'err');render();
+      bx.hidden=true;
+      $('#sync').textContent='Копия загружена';
+    }catch(err){$('#sync').textContent='Не удалось прочитать копию. Проверь, что вставлен весь текст'}
+  }
+  $('#boxGo').addEventListener('click',function(){applyBackup(ba.value)});
+  $('#boxFileIn').addEventListener('change',function(e){
     var f=e.target.files&&e.target.files[0];if(!f)return;
-    var r=new FileReader();
-    r.onload=function(){
-      try{
-        var o=normalize(JSON.parse(r.result));
-        if(!Object.keys(o.items).length&&!o.custom.length)throw new Error('empty');
-        o.u=Date.now();state=o;ui.open=null;ui.fk=null;
-        setSync(saveLocal()?'local':'err');render();
-        $('#sync').textContent='Копия загружена';
-      }catch(err){$('#sync').textContent='Не удалось прочитать файл копии'}
-    };
-    r.readAsText(f);e.target.value='';
+    var r=new FileReader();r.onload=function(){applyBackup(r.result)};r.readAsText(f);e.target.value='';
   });
 })();
 </script>
